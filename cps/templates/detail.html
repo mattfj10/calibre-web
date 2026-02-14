@@ -101,6 +101,11 @@
                             {% endif %}
                         </div>
                     {% endif %}
+                    {% if entry.local_tts_available and current_user.role_viewer() %}
+                        <div class="btn-group" role="group">
+                            <a target="_blank" href="{{ url_for('web.listen_local_tts_player', book_id=entry.id) }}" id="localttsbtn" class="btn btn-primary" role="button"><span class="glyphicon glyphicon-headphones"></span> {{ _('Listen as Audiobook (Local TTS)') }}</a>
+                        </div>
+                    {% endif %}
                     {% if entry.audio_entries|length > 0 and current_user.role_viewer() %}
                         <div class="btn-group" role="group">
                             {% if entry.audio_entries|length > 1 %}

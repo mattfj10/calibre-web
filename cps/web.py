@@ -23,6 +23,9 @@ import json
 import mimetypes
 import chardet  # dependency of requests
 import copy
+import shlex
+import subprocess
+import tempfile
 from importlib.metadata import metadata
 
 from flask import Blueprint, jsonify, request, redirect, send_from_directory, make_response, flash, abort, url_for
@@ -1572,7 +1575,121 @@ def profile():
                                  oauth_status=oauth_status)
 
 
+
 # ###################################Show single book ##################################################################
+
+
+def _get_tts_source_format(book):
+    for preferred_format in ["txt", "epub", "kepub"]:
+        for media_format in book.data:
+            if media_format.format.lower() == preferred_format:
+                return preferred_format, media_format
+    return None, None
+
+
+def _extract_tts_text(book, source_format, source_data):
+    if source_format == "txt":
+        with open(os.path.join(config.get_book_path(), book.path, source_data.name + "." + source_format), "rb") as txt_file:
+            rawdata = txt_file.read()
+        result = chardet.detect(rawdata)
+        encoding = result.get('encoding') or 'utf-8'
+        return rawdata.decode(encoding, errors='ignore')
+
+    if source_format in ["epub", "kepub"] and config.config_converterpath:
+        source_file = os.path.join(config.get_book_path(), book.path, source_data.name + "." + source_format)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_file = os.path.join(temp_dir, "tts-source.txt")
+            command = [config.config_converterpath, source_file, output_file]
+            if config.config_calibre:
+                command.extend(config.config_calibre.split())
+            conversion = subprocess.run(command, capture_output=True, text=True, check=False)
+            if conversion.returncode != 0:
+                raise RuntimeError(conversion.stderr or conversion.stdout or "ebook-convert failed")
+            with open(output_file, "rb") as converted_file:
+                converted_data = converted_file.read()
+        result = chardet.detect(converted_data)
+        encoding = result.get('encoding') or 'utf-8'
+        return converted_data.decode(encoding, errors='ignore')
+
+    raise RuntimeError("Unsupported format for local TTS")
+
+
+def _render_local_tts(book_id):
+    if not config.config_tts_local_enabled:
+        abort(404)
+
+    if not config.config_tts_model_path or not os.path.isfile(config.config_tts_model_path):
+        return make_response(_("Local TTS model path is not configured or file does not exist"), 503)
+
+    book = calibre_db.get_filtered_book(book_id)
+    if not book:
+        return make_response(_("Book is unavailable"), 404)
+
+    source_format, source_data = _get_tts_source_format(book)
+    if not source_format:
+        return make_response(_("No supported text format (TXT/EPUB/KEPUB) found for this title"), 400)
+
+    try:
+        extracted_text = _extract_tts_text(book, source_format, source_data)
+        cleaned_text = " ".join(extracted_text.split())
+        tts_limit = config.config_tts_max_chars or 12000
+        cleaned_text = cleaned_text[:max(tts_limit, 500)]
+        if not cleaned_text:
+            return make_response(_("Unable to extract readable text from this title"), 400)
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as out_file:
+            out_path = out_file.name
+
+        try:
+            command_template = config.config_tts_command or "piper --model {model} --output_file {output}"
+            try:
+                command = shlex.split(command_template.format(model=config.config_tts_model_path, output=out_path))
+            except KeyError:
+                return make_response(_("Local TTS command template is invalid"), 500)
+            synth = subprocess.run(command, input=cleaned_text, text=True, capture_output=True, check=False)
+            if synth.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
+                log.error("Local TTS command failed: %s", synth.stderr or synth.stdout)
+                return make_response(_("Local TTS generation failed"), 500)
+            with open(out_path, "rb") as audio_file:
+                audio = audio_file.read()
+        finally:
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+
+        response = make_response(audio)
+        response.headers["Content-Type"] = "audio/wav"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except FileNotFoundError:
+        return make_response(_("Unable to access source file for local TTS"), 404)
+    except Exception as ex:
+        log.error_or_exception(ex)
+        return make_response(_("Unable to generate local TTS audio"), 500)
+
+
+@web.route("/listen/<int:book_id>/local-tts")
+@login_required_if_no_ano
+@viewer_required
+def listen_local_tts(book_id):
+    return _render_local_tts(book_id)
+
+
+@web.route("/listen/<int:book_id>/local-tts/player")
+@login_required_if_no_ano
+@viewer_required
+def listen_local_tts_player(book_id):
+    book = calibre_db.get_filtered_book(book_id)
+    if not book:
+        flash(_("Oops! Selected book is unavailable. File does not exist or is not accessible"), category="error")
+        return redirect(url_for("web.index"))
+    if not config.config_tts_local_enabled:
+        flash(_("Local TTS is disabled in settings"), category="error")
+        return redirect(url_for("web.show_book", book_id=book_id))
+    source_format, _ = _get_tts_source_format(book)
+    if not source_format:
+        flash(_("No supported text format available for local TTS"), category="error")
+        return redirect(url_for("web.show_book", book_id=book_id))
+    return render_title_template('listentts.html', entry=book, title=book.title, tts_url=url_for('web.listen_local_tts', book_id=book_id))
 
 
 @web.route("/read/<int:book_id>/<book_format>")
@@ -1668,6 +1785,9 @@ def show_book(book_id):
         for media_format in entry.data:
             if media_format.format.lower() in constants.EXTENSIONS_AUDIO:
                 entry.audio_entries.append(media_format.format.lower())
+
+        source_format, _ = _get_tts_source_format(entry)
+        entry.local_tts_available = bool(config.config_tts_local_enabled and source_format)
 
         return render_title_template('detail.html',
                                      entry=entry,
