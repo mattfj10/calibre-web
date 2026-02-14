@@ -185,3 +185,18 @@ We welcome suggestions for new features. Please create a new issue in the reposi
 ---
 
 Thank you for using Calibre-Web! We hope you enjoy managing your eBook library with our tool.
+
+## Nix flake usage
+
+A basic `flake.nix` is included so you can build and run this repository with Nix:
+
+```bash
+nix build
+./result/bin/calibre-web
+```
+
+You can also open a development shell:
+
+```bash
+nix develop
+```
