@@ -188,15 +188,28 @@ Thank you for using Calibre-Web! We hope you enjoy managing your eBook library w
 
 ## Nix flake usage
 
-A basic `flake.nix` is included so you can build and run this repository with Nix:
+A self-contained `flake.nix` is included so you can build and run this repository with Nix-provided runtime dependencies:
 
 ```bash
-nix build
+nix run .#
+```
+
+or build the package and run it directly:
+
+```bash
+nix build .#
 ./result/bin/calibre-web
 ```
 
-You can also open a development shell:
+Then open Calibre-Web in your browser:
+
+```text
+http://localhost:8083
+```
+
+You can also open a development shell with the same runtime dependencies preloaded:
 
 ```bash
 nix develop
+python cps.py
 ```
