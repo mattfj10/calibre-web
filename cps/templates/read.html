@@ -61,8 +61,9 @@
 	        </div>
 	        <div id="title-controls">
 	            <a id="bookmark" class="icon-bookmark-empty">Bookmark</a>
+	            <a id="layout-lock" class="icon-lock-open" title="{{_('Lock layout to prevent text reflow on resize')}}" onclick="toggleLayoutLock()">Lock</a>
 	            <a id="setting" class="icon-cog">Settings</a>
-	            <a id="fullscreen" class="icon-resize-full">Fullscreen</a>            
+	            <a id="fullscreen" class="icon-resize-full">Fullscreen</a>
 	        </div>
 	    </div>
 
@@ -323,6 +324,70 @@
                     if (target) target.style.visibility = val ? "visible" : "hidden";
                 });
             }
+        })();
+
+        // Layout lock: freeze viewer dimensions so text doesn't reflow on window resize
+        var layoutLocked = false;
+
+        function toggleLayoutLock() {
+            var viewer = document.getElementById("viewer");
+            var lockBtn = document.getElementById("layout-lock");
+            var mainEl = document.getElementById("main");
+
+            if (!layoutLocked) {
+                // Capture current pixel dimensions and fix them
+                var w = viewer.offsetWidth;
+                var h = viewer.offsetHeight;
+                viewer.style.width = w + "px";
+                viewer.style.height = h + "px";
+                mainEl.style.overflow = "auto";
+                layoutLocked = true;
+                lockBtn.className = "icon-lock-closed";
+                lockBtn.title = "{{_('Unlock layout (allow text reflow on resize)')}}";
+                try {
+                    localStorage.setItem("calibre.reader.layoutLocked", "true");
+                    localStorage.setItem("calibre.reader.lockedWidth", w);
+                    localStorage.setItem("calibre.reader.lockedHeight", h);
+                } catch (e) {}
+            } else {
+                // Restore percentage-based sizing
+                viewer.style.width = "";
+                viewer.style.height = "";
+                mainEl.style.overflow = "";
+                layoutLocked = false;
+                lockBtn.className = "icon-lock-open";
+                lockBtn.title = "{{_('Lock layout to prevent text reflow on resize')}}";
+                try {
+                    localStorage.removeItem("calibre.reader.layoutLocked");
+                    localStorage.removeItem("calibre.reader.lockedWidth");
+                    localStorage.removeItem("calibre.reader.lockedHeight");
+                } catch (e) {}
+                // Re-paginate for the new container size
+                if (reader && reader.rendition) {
+                    reader.rendition.resize();
+                }
+            }
+        }
+
+        // Restore lock state on page load
+        (function () {
+            try {
+                if (localStorage.getItem("calibre.reader.layoutLocked") === "true") {
+                    var w = parseInt(localStorage.getItem("calibre.reader.lockedWidth"));
+                    var h = parseInt(localStorage.getItem("calibre.reader.lockedHeight"));
+                    if (w > 0 && h > 0) {
+                        var viewer = document.getElementById("viewer");
+                        var lockBtn = document.getElementById("layout-lock");
+                        var mainEl = document.getElementById("main");
+                        viewer.style.width = w + "px";
+                        viewer.style.height = h + "px";
+                        mainEl.style.overflow = "auto";
+                        layoutLocked = true;
+                        lockBtn.className = "icon-lock-closed";
+                        lockBtn.title = "{{_('Unlock layout (allow text reflow on resize)')}}";
+                    }
+                }
+            } catch (e) {}
         })();
     </script>
     <script type="text/javascript">
