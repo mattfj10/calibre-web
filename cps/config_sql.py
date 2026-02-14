@@ -175,6 +175,11 @@ class _Settings(_Base):
     config_limiter_options = Column(String, default="")
     config_check_extensions = Column(Boolean, default=True)
 
+    config_tts_local_enabled = Column(Boolean, default=False)
+    config_tts_model_path = Column(String, default="")
+    config_tts_command = Column(String, default="piper --model {model} --output_file {output}")
+    config_tts_max_chars = Column(Integer, default=12000)
+
     def __repr__(self):
         return self.__class__.__name__
 

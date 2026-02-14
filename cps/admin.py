@@ -1859,6 +1859,20 @@ def _configuration_update_helper():
 
         # security configuration
         _config_checkbox(to_save, "config_check_extensions")
+        _config_checkbox(to_save, "config_tts_local_enabled")
+        _config_string(to_save, "config_tts_model_path")
+        _config_string(to_save, "config_tts_command")
+        if not to_save.get("config_tts_command"):
+            to_save["config_tts_command"] = "piper --model {model} --output_file {output}"
+            _config_string(to_save, "config_tts_command")
+        if "{model}" not in config.config_tts_command or "{output}" not in config.config_tts_command:
+            return _configuration_result(_('TTS command must include {model} and {output} placeholders'))
+        if not to_save.get("config_tts_max_chars"):
+            to_save["config_tts_max_chars"] = "12000"
+        if 500 <= int(to_save.get("config_tts_max_chars", "0")) <= 50000:
+            _config_int(to_save, "config_tts_max_chars")
+        else:
+            return _configuration_result(_('TTS max characters has to be between 500 and 50000'))
         _config_checkbox(to_save, "config_password_policy")
         _config_checkbox(to_save, "config_password_number")
         _config_checkbox(to_save, "config_password_lower")

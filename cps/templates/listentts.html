@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block body %}
+<div class="discover">
+  <h2>{{ _('Local Audiobook Playback') }}: {{ entry.title }}</h2>
+  <p>{{ _('This stream is generated on demand using your configured local TTS model.') }}</p>
+  <audio controls autoplay style="width: 100%; margin: 10px 0;">
+    <source src="{{ tts_url }}" type="audio/wav">
+  </audio>
+  <p>
+    <a class="btn btn-default" href="{{ url_for('web.show_book', book_id=entry.id) }}">
+      <span class="glyphicon glyphicon-arrow-left"></span> {{ _('Back to details') }}
+    </a>
+  </p>
+</div>
+{% endblock %}
