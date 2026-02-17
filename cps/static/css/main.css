@@ -918,3 +918,10 @@ input:-moz-placeholder {
 .icon-resize-small::before {
   content: "\e808";
 } /* '' */
+
+.icon-lock-open::before {
+  content: "\25A1"; /* open square - unlocked */
+}
+.icon-lock-closed::before {
+  content: "\25A3"; /* filled square - locked */
+}
